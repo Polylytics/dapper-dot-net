@@ -4154,6 +4154,31 @@ Type type, IDataReader reader, int startBound = 0, int length = -1, bool returnN
                 return ReadImpl<object>(type, buffered);
             }
 
+            /// <summary>
+            /// Read multiple objects from a single record set
+            /// </summary>
+#if CSHARP30
+            public IEnumerable<T> Read<T>(Type[] types, Func<object[], T> mapper, string splitOn, bool buffered)
+#else
+            public IEnumerable<T> Read<T>(Type[] types, Func<object[], T> mapper, string splitOn = "Id", bool buffered = true)
+#endif
+            {
+                var result = MultiReadInternal<T>(types, mapper, splitOn);
+                return buffered ? result.ToList() : result;
+            }
+
+            private IEnumerable<TReturn> MultiReadInternal<TReturn>(Type[] types, Func<object[], TReturn> mapper, string splitOn) {
+                var identity = this.identity.ForGrid(typeof(TReturn), types, gridIndex);
+                try {
+                    foreach (var r in SqlMapper.MultiMapImpl<TReturn>(null, default(CommandDefinition), types, mapper, splitOn, reader, identity, false)) {
+                        yield return r;
+                    }
+                }
+                finally {
+                    NextResult();
+                }
+            }
+
             private IEnumerable<T> ReadImpl<T>(Type type, bool buffered)
             {
                 if (reader == null) throw new ObjectDisposedException(GetType().FullName, "The reader has been disposed; this can happen after all data has been consumed");
